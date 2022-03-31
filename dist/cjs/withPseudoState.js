@@ -11,8 +11,6 @@ var _coreEvents = require("@storybook/core-events");
 
 var _constants = require("./constants");
 
-var _splitSelectors = require("./splitSelectors");
-
 function ownKeys(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); enumerableOnly && (symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; })), keys.push.apply(keys, symbols); } return keys; }
 
 function _objectSpread(target) { for (var i = 1; i < arguments.length; i++) { var source = null != arguments[i] ? arguments[i] : {}; i % 2 ? ownKeys(Object(source), !0).forEach(function (key) { _defineProperty(target, key, source[key]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys(Object(source)).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } return target; }
@@ -91,7 +89,44 @@ var shadowHosts = new Set();
 
 _addons.addons.getChannel().on(_coreEvents.STORY_CHANGED, function () {
   return shadowHosts.clear();
-}); // Global decorator that rewrites stylesheets and applies classnames to render pseudo styles
+});
+
+var isAtRule = function isAtRule(selector) {
+  return selector.indexOf("@") === 0;
+};
+
+var splitSelectors = function splitSelectors(selectors) {
+  if (isAtRule(selectors)) return [selectors];
+  var result = [];
+  var parentheses = 0;
+  var brackets = 0;
+  var selector = "";
+
+  for (var i = 0, len = selectors.length; i < len; i++) {
+    var char = selectors[i];
+
+    if (char === "(") {
+      parentheses += 1;
+    } else if (char === ")") {
+      parentheses -= 1;
+    } else if (char === "[") {
+      brackets += 1;
+    } else if (char === "]") {
+      brackets -= 1;
+    } else if (char === ",") {
+      if (!parentheses && !brackets) {
+        result.push(selector.trim());
+        selector = "";
+        continue;
+      }
+    }
+
+    selector += char;
+  }
+
+  result.push(selector.trim());
+  return result;
+}; // Global decorator that rewrites stylesheets and applies classnames to render pseudo styles
 
 
 var withPseudoState = function withPseudoState(StoryFn, _ref5) {
@@ -170,7 +205,7 @@ function rewriteStyleSheets(shadowRoot) {
                 selectorText = _step2$value.selectorText;
 
             if (matchOne.test(selectorText)) {
-              var selectors = (0, _splitSelectors.splitSelectors)(selectorText);
+              var selectors = splitSelectors(selectorText);
               var newRule = cssText.replace(selectorText, selectors.flatMap(function (selector) {
                 if (selector.includes(".pseudo-")) return [];
                 var states = [];
@@ -180,7 +215,7 @@ function rewriteStyleSheets(shadowRoot) {
                 });
                 var stateSelector;
 
-                if (selector.startsWith(":host(")) {
+                if (selector.startsWith(":host(") || selector.startsWith("::slotted(")) {
                   stateSelector = states.reduce(function (acc, state) {
                     return acc.replaceAll(":".concat(state), ".pseudo-".concat(state));
                   }, selector);

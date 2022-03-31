@@ -3,7 +3,6 @@ import { addons, useEffect, useGlobals } from "@storybook/addons"
 import { DOCS_RENDERED, STORY_CHANGED, STORY_RENDERED } from "@storybook/core-events"
 
 import { PSEUDO_STATES } from "./constants"
-import { splitSelectors } from "./splitSelectors"
 
 const pseudoStates = Object.values(PSEUDO_STATES)
 const matchOne = new RegExp(`:(${pseudoStates.join("|")})`)
@@ -44,6 +43,40 @@ const updateShadowHost = (shadowHost) => {
 // Keep track of attached shadow host elements for the current story
 const shadowHosts = new Set()
 addons.getChannel().on(STORY_CHANGED, () => shadowHosts.clear())
+
+const isAtRule = selector => selector.indexOf("@") === 0
+
+const splitSelectors = selectors => {
+	if (isAtRule(selectors)) return [selectors]
+
+	let result = []
+	let parentheses = 0
+	let brackets = 0
+	let selector = ""
+
+	for (let i = 0, len = selectors.length; i < len; i++) {
+		const char = selectors[i]
+		if (char === "(") {
+			parentheses += 1
+		} else if (char === ")") {
+			parentheses -= 1
+		} else if (char === "[") {
+			brackets += 1
+		} else if (char === "]") {
+			brackets -= 1
+		} else if (char === ",") {
+			if (!parentheses && !brackets) {
+				result.push(selector.trim())
+				selector = ""
+				continue
+			}
+		}
+		selector += char
+	}
+
+	result.push(selector.trim())
+	return result
+}
 
 // Global decorator that rewrites stylesheets and applies classnames to render pseudo styles
 export const withPseudoState = (StoryFn, { viewMode, parameters, id }) => {

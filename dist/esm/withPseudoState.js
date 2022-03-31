@@ -30,7 +30,6 @@ function _arrayLikeToArray(arr, len) { if (len == null || len > arr.length) len 
 import { addons, useEffect, useGlobals } from "@storybook/addons";
 import { DOCS_RENDERED, STORY_CHANGED, STORY_RENDERED } from "@storybook/core-events";
 import { PSEUDO_STATES } from "./constants";
-import { splitSelectors } from "./splitSelectors";
 var pseudoStates = Object.values(PSEUDO_STATES);
 var matchOne = new RegExp(":(".concat(pseudoStates.join("|"), ")"));
 var matchAll = new RegExp(":(".concat(pseudoStates.join("|"), ")"), "g"); // Drops any existing pseudo state classnames that carried over from a previously viewed story
@@ -80,7 +79,45 @@ var updateShadowHost = function updateShadowHost(shadowHost) {
 var shadowHosts = new Set();
 addons.getChannel().on(STORY_CHANGED, function () {
   return shadowHosts.clear();
-}); // Global decorator that rewrites stylesheets and applies classnames to render pseudo styles
+});
+
+var isAtRule = function isAtRule(selector) {
+  return selector.indexOf("@") === 0;
+};
+
+var splitSelectors = function splitSelectors(selectors) {
+  if (isAtRule(selectors)) return [selectors];
+  var result = [];
+  var parentheses = 0;
+  var brackets = 0;
+  var selector = "";
+
+  for (var i = 0, len = selectors.length; i < len; i++) {
+    var char = selectors[i];
+
+    if (char === "(") {
+      parentheses += 1;
+    } else if (char === ")") {
+      parentheses -= 1;
+    } else if (char === "[") {
+      brackets += 1;
+    } else if (char === "]") {
+      brackets -= 1;
+    } else if (char === ",") {
+      if (!parentheses && !brackets) {
+        result.push(selector.trim());
+        selector = "";
+        continue;
+      }
+    }
+
+    selector += char;
+  }
+
+  result.push(selector.trim());
+  return result;
+}; // Global decorator that rewrites stylesheets and applies classnames to render pseudo styles
+
 
 export var withPseudoState = function withPseudoState(StoryFn, _ref5) {
   var viewMode = _ref5.viewMode,
@@ -166,7 +203,7 @@ function rewriteStyleSheets(shadowRoot) {
                 });
                 var stateSelector;
 
-                if (selector.startsWith(":host(")) {
+                if (selector.startsWith(":host(") || selector.startsWith("::slotted(")) {
                   stateSelector = states.reduce(function (acc, state) {
                     return acc.replaceAll(":".concat(state), ".pseudo-".concat(state));
                   }, selector);
